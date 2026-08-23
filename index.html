@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Nullborn - Genesis Memory</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 { 
+            text-shadow: 0 0 10px #fff; 
+            letter-spacing: 5px; 
+            text-transform: uppercase; 
+            margin-bottom: 20px;
+        }
+
+        .input-box {
+            background: #000; 
+            border: 2px solid #fff; 
+            color: #fff;
+            padding: 15px; 
+            margin: 10px 0; 
+            width: 300px; 
+            outline: none;
+            font-family: monospace;
+            text-align: center;
+        }
+
+        .btn {
+            background: #000; 
+            border: 2px solid #fff; 
+            color: #fff;
+            padding: 15px 30px; 
+            margin-top: 20px; 
+            cursor: pointer;
+            text-transform: uppercase;
+            font-family: monospace;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover { 
+            background: #fff; 
+            color: #000; 
+        }
+        
+        #error-msg {
+            color: #ff3333; 
+            display: none; 
+            margin-top: 15px;
+        }
+
+        #game-container { 
+            display: none; 
+            text-align: center; 
+            width: 100%;
+        }
+
+        /* Top Progress Bar - Clean and Separated */
+        #progress-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .progress-segment {
+            width: 35px;
+            height: 10px;
+            border: 2px solid #444;
+            background: #000;
+        }
+
+        /* Success and Failure States */
+        .progress-segment.pass {
+            border: 2px solid #fff;
+            background: #fff;
+            box-shadow: 0 0 15px #fff;
+        }
+
+        .progress-segment.fail {
+            border: 2px solid #222;
+            background: #111;
+            box-shadow: 0 0 10px #000;
+        }
+
+        /* Dynamic Grid Layout */
+        .grid {
+            display: grid; 
+            gap: 30px; 
+            margin: 20px auto;
+            justify-content: center;
+        }
+
+        .orb {
+            background: #000;
+            border: 2px solid #333; 
+            cursor: pointer; 
+            transition: all 0.1s ease;
+        }
+
+        .orb.active {
+            border: 4px solid #fff; 
+            box-shadow: 0 0 20px #fff; 
+            background: #fff; 
+        }
+
+        /* Failure state for the specific wrong block clicked */
+        .orb.error {
+            border: 4px solid #222; 
+            background: #111; 
+        }
+
+        #status { 
+            margin-top: 30px; 
+            font-size: 1.2rem; 
+            min-height: 30px;
+            text-transform: uppercase;
+        }
+
+        .victory-pulse {
+            font-size: 1.5rem;
+            color: #fff;
+            text-shadow: 0 0 15px #fff;
+            animation: pulse 1.5s infinite alternate;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 40px;
+        }
+
+        @keyframes pulse {
+            0% { text-shadow: 0 0 10px #fff; transform: scale(1); }
+            100% { text-shadow: 0 0 25px #fff, 0 0 40px #fff; transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="entry-portal">
+        <h1>The Nullborn</h1>
+        <p style="margin-bottom: 20px;">Submit credentials to initiate.</p>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <input type="text" id="xHandle" class="input-box" placeholder="@X_Handle">
+            <input type="text" id="evmAddress" class="input-box" placeholder="0x...">
+            <button class="btn" onclick="initializeSystem()">Enter The Void</button>
+            <p id="error-msg"></p>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <!-- Progress Bar -->
+        <div id="progress-container"></div>
+        
+        <h2 id="round-display" style="margin-bottom: 10px;">Round 1</h2>
+        <div class="grid" id="orb-grid"></div>
+        <p id="status">Watch the sequence...</p>
+    </div>
+
+    <script>
+        let sessionData = { xHandle: "", evmAddress: "" };
+        let sequence = [];
+        let playerStep = 0;
+        let currentRound = 1;
+        let isPlayerTurn = false;
+        let totalBlocks = 4;
+        
+        const targetRound = 8; 
+
+        function initializeSystem() {
+            const handle = document.getElementById('xHandle').value.trim();
+            const evm = document.getElementById('evmAddress').value.trim();
+            const errorMsg = document.getElementById('error-msg');
+
+            if (!handle.startsWith('@') || handle.length < 2) {
+                errorMsg.innerText = "Invalid format. X Handle must include @";
+                errorMsg.style.display = "block"; return;
+            }
+            if (!evm.startsWith('0x') || evm.length !== 42) {
+                errorMsg.innerText = "Invalid format. Requires a valid EVM Address.";
+                errorMsg.style.display = "block"; return;
+            }
+
+            sessionData.xHandle = handle; 
+            sessionData.evmAddress = evm;
+            
+            document.getElementById('entry-portal').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            
+            buildProgressBar();
+            setTimeout(nextRound, 1000);
+        }
+
+        function buildProgressBar() {
+            const container = document.getElementById('progress-container');
+            container.innerHTML = '';
+            for (let i = 1; i <= targetRound; i++) {
+                const segment = document.createElement('div');
+                segment.className = 'progress-segment';
+                segment.id = `prog-${i}`;
+                container.appendChild(segment);
+            }
+        }
+
+        // Dynamically scales the grid as rounds progress
+        function buildGrid() {
+            const grid = document.getElementById('orb-grid');
+            grid.innerHTML = '';
+            
+            let columns = 2;
+            let orbSize = '120px';
+
+            if (currentRound >= 5) {
+                totalBlocks = 16;
+                columns = 4;
+                orbSize = '80px';
+            } else if (currentRound >= 3) {
+                totalBlocks = 9;
+                columns = 3;
+                orbSize = '100px';
+            } else {
+                totalBlocks = 4;
+                columns = 2;
+                orbSize = '120px';
+            }
+
+            grid.style.gridTemplateColumns = `repeat(${columns}, ${orbSize})`;
+
+            for (let i = 0; i < totalBlocks; i++) {
+                const orb = document.createElement('div');
+                orb.className = 'orb';
+                orb.id = `orb-${i}`;
+                orb.style.width = orbSize;
+                orb.style.height = orbSize;
+                orb.onclick = () => handlePlayerInput(i);
+                grid.appendChild(orb);
+            }
+        }
+
+        function nextRound() {
+            playerStep = 0;
+            isPlayerTurn = false;
+            
+            buildGrid(); // Rebuild grid to scale difficulty
+            
+            document.getElementById('round-display').innerText = `Round ${currentRound} / ${targetRound}`;
+            document.getElementById('status').innerText = "Watch the sequence...";
+            document.getElementById('status').style.color = "#fff";
+            
+            sequence.push(Math.floor(Math.random() * totalBlocks));
+            playSequence();
+        }
+
+        function playSequence() {
+            let i = 0;
+            const interval = setInterval(() => {
+                flashOrb(sequence[i]);
+                i++;
+                if (i >= sequence.length) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        isPlayerTurn = true;
+                        document.getElementById('status').innerText = "Your turn. Replicate the anomaly.";
+                    }, 500);
+                }
+            }, 600); // Fixed flash speed to handle the increased block count smoothly
+        }
+
+        function flashOrb(index) {
+            const orb = document.getElementById(`orb-${index}`);
+            if (orb) {
+                orb.classList.add('active');
+                setTimeout(() => orb.classList.remove('active'), 250);
+            }
+        }
+
+        function handlePlayerInput(index) {
+            if (!isPlayerTurn) return;
+
+            const clickedOrb = document.getElementById(`orb-${index}`);
+
+            if (index === sequence[playerStep]) {
+                flashOrb(index);
+                playerStep++;
+                
+                if (playerStep === sequence.length) {
+                    // Round passed successfully
+                    document.getElementById(`prog-${currentRound}`).classList.add('pass');
+                    
+                    if (currentRound === targetRound) {
+                        triggerVictory();
+                    } else {
+                        currentRound++;
+                        isPlayerTurn = false;
+                        document.getElementById('status').innerText = "Sequence accepted. Expanding anomaly...";
+                        setTimeout(nextRound, 1200);
+                    }
+                }
+            } else {
+                // Round Failed
+                document.getElementById(`prog-${currentRound}`).classList.add('fail');
+                clickedOrb.classList.add('error');
+                triggerDefeat();
+            }
+        }
+
+        function triggerVictory() {
+    isPlayerTurn = false;
+    
+    document.querySelector('.grid').style.display = 'none';
+    document.getElementById('round-display').style.display = 'none';
+    document.getElementById('progress-container').style.display = 'none';
+    
+    const statusText = document.getElementById('status');
+    statusText.innerText = "The Anomaly is Complete. Congratulations.";
+    statusText.classList.add('victory-pulse');
+    
+    // The Payload
+    const payload = {
+        handle: sessionData.xHandle,
+        address: sessionData.evmAddress,
+        hash: btoa(sessionData.evmAddress + "NullbornGTD") // Simple local hash
+    };
+
+    // The Transmission
+    fetch('http://localhost:3000/api/gtd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => console.log("GTD Secured in Database."))
+    .catch(error => console.error("Transmission failed:", error));
+}
+
+        function triggerDefeat() {
+            isPlayerTurn = false;
+            document.getElementById('status').innerText = "Sequence failed. The void consumes you.";
+            document.getElementById('status').style.color = "#ff3333";
+            
+            // Pauses for 3 seconds so the player sees exactly where they failed before resetting
+            setTimeout(() => location.reload(), 3000); 
+        }
+    </script>
+</body>
+</html>
